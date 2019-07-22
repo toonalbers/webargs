@@ -57,6 +57,39 @@ class FlaskParser(core.Parser):
         """Pull a value from the request's ``view_args``."""
         return core.get_value(req.view_args, name, field)
 
+    def get_available_fields(self, req, locations):
+        """Pull the names of all fields from the request, separated by their
+        location, and only for the provided locations
+
+        :param req: The request object to parse.
+        :param tuple locations: Where on the request to search for fields.
+            Can include one or more of ``('json', 'querystring', 'form',
+            'headers', 'cookies', 'files')``.
+        :return: a dict with all provided fields in a request, keyed by the
+            location in which they occur
+        """
+        fields = dict()
+        if "json" in locations:
+            # TODO copied from parse_json, refactor to separate method
+            json_data = self._cache.get("json")
+            if json_data is None:
+                # We decode the json manually here instead of
+                # using req.get_json() so that we can handle
+                # JSONDecodeErrors consistently
+                data = req.get_data(cache=True)
+                try:
+                    self._cache["json"] = json_data = core.parse_json(data)
+                except json.JSONDecodeError as e:
+                    if e.doc == "":
+                        return core.missing
+                    else:
+                        return self.handle_invalid_json_error(e, req)
+            # Now get all keys from the json
+            json_keys = json_data.keys()
+            fields["json"] = json_keys
+        # TODO etc for querystring, form, headers, cookies, files
+        return fields
+
     def parse_json(self, req, name, field):
         """Pull a json value from the request."""
         json_data = self._cache.get("json")
